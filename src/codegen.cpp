@@ -3385,6 +3385,14 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             return;
 
         Value *rval = boxed(rval_info, ctx);
+        if (rval_info.needsgcroot && !vi.memloc) {
+            // add a gc root for this SA node
+            // TODO: remove this?
+            assert(vi.isSA);
+            vi.memloc = emit_local_slot(ctx);
+            vi.hasGCRoot = true;
+            rval_info.needsgcroot = false;
+        }
         if (vi.memloc) {
             Value *bp = vi.memloc;
             if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && (!rval_info.typ || rval_info.typ == jl_bottom_type)) {
@@ -3402,7 +3410,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             if (vi.isBox) {
                 bp = builder.CreatePointerCast(builder.CreateLoad(bp), T_ppjlvalue);
             }
-            builder.CreateStore(rval, bp, vi.isVolatile);
+            builder.CreateStore(rval, bp, vi.isVolatile); // todo: move this closer to the value creation?
             if (vi.isBox) {
                 // bp is a jl_box_t*
                 emit_write_barrier(ctx, bp, rval);
@@ -3418,12 +3426,6 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                         rval_info.typ);
             }
 
-            if (rval_info.needsgcroot) {
-                // add a gc root for this SA node
-                // TODO: remove this
-                make_gcrooted(rval_info.V, ctx);
-                rval_info.needsgcroot = false;
-            }
             vi.value = rval_info;
         }
         // add info to arravar list
