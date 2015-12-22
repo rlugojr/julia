@@ -10,7 +10,9 @@ ifeq ($(JULIA_PKGDIR),)
 	JULIA_PKGDIR:=$(shell echo ~)/.julia
 endif
 
-VERSION_SUFFIX:=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
+DMG_VERSION_SUFFIX:=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
+
+APP_VERSION_SUFFIX:=$(shell echo $(JULIA_VERSION) | grep -o '^[0-9]\+.[0-9]\+')
 
 all: clean dmg
 
@@ -24,14 +26,14 @@ dmg:
 	-cp -a $(build_datarootdir)/git* ./julia/share
 	rm -f julia/lib/*.{a,la}
 	-mkdir dmg
-	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -R -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang -x -f julia script ./dmg/Julia-$(VERSION_SUFFIX).app
-	-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep ./dmg/Julia-$(VERSION_SUFFIX).app
+	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -R -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang -x -f julia script ./dmg/Julia-$(APP_VERSION_SUFFIX).app
+	-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep ./dmg/Julia-$(APP_VERSION_SUFFIX).app
 	-cp -f Julia.icns dmg/.VolumeIcon.icns
 	-ln -fs /Applications ./dmg/Applications
-	-chmod 755 ./dmg/Julia-$(VERSION_SUFFIX).app/Contents/MacOS/Julia
+	-chmod 755 ./dmg/Julia-$(APP_VERSION_SUFFIX).app/Contents/MacOS/Julia
 	@echo "We're going to chown the .app file to root:admin now, which requires sudo.  You may be asked for your password:"
-	sudo chown -R root:admin ./dmg/Julia-$(VERSION_SUFFIX).app
-	sudo hdiutil create Julia-$(VERSION_SUFFIX).dmg -size 500m -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
+	sudo chown -R root:admin ./dmg/Julia-$(APP_VERSION_SUFFIX).app
+	sudo hdiutil create Julia-$(DMG_VERSION_SUFFIX).dmg -size 500m -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
 
 
 clean:
