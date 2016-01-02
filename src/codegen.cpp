@@ -3538,7 +3538,8 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed, b
         return jl_cgval_t();
     }
     if (jl_is_lambda_info(expr)) {
-        return mark_julia_type(emit_lambda_closure(expr, ctx), true, jl_function_type, ctx);
+        Value *closure = emit_lambda_closure(expr, ctx);
+        return mark_julia_type(closure, true, jl_function_type, ctx, /*needsgcroot*/!isa<Constant>(closure));
     }
     if (!jl_is_expr(expr)) {
         int needroot = true;
