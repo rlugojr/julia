@@ -957,7 +957,7 @@ end
 @deprecate_binding Coff_t Int64
 @deprecate_binding FileOffset Int64
 
-@deprecate isgeneric(f) true
+@deprecate isgeneric(f) isa(f,Function)
 
 # need to do this manually since the front end deprecates method defs of `call`
 const call = @eval function(f,args...)
