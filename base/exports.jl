@@ -995,6 +995,7 @@ export
     drop,
     cycle,
     repeated,
+    product,
 
 # object identity and equality
     copy,
