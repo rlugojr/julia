@@ -19,7 +19,7 @@ lqfact!{T<:BlasFloat}(A::StridedMatrix{T}) = LQ(LAPACK.gelqf!(A)...)
 lqfact{T<:BlasFloat}(A::StridedMatrix{T})  = lqfact!(copy(A))
 lqfact(x::Number) = lqfact(fill(x,1,1))
 
-function lq(A::Union(Number, AbstractMatrix); thin::Bool=true)
+function lq(A::Union{Number, AbstractMatrix}; thin::Bool=true)
     F = lqfact(A)
     F[:L], full(F[:Q], thin=thin)
 end
@@ -47,15 +47,23 @@ convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)
 
 size(A::LQ, dim::Integer) = size(A.factors, dim)
 size(A::LQ) = size(A.factors)
-size(A::LQPackedQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, 1) : 1) : throw(BoundsError())
-size(A::LQPackedQ) = size(A, 1), size(A, 2)
+size(A::LQPackedQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, dim) : 1) : throw(BoundsError())
+size(A::LQPackedQ) = size(A.factors)
 
 full(A::LQ) = A[:L]*A[:Q]
+#=
+We construct the full eye here, even though it seems ineffecient, because
+every element in the output matrix is a function of all the elements of
+the input matrix. The eye is modified by the elementary reflectors held
+in A, so this is not just an indexing operation. Note that in general
+explicitly constructing Q, rather than using the ldiv or mult methods,
+may be a wasteful allocation.
+=#
 function full{T}(A::LQPackedQ{T}; thin::Bool=true)
     if thin
-        A_mul_B!(eye(T, minimum(size(A.factors)), size(A.factors,2)), A)
+        LAPACK.orglq!(copy(A.factors),A.τ)
     else
-        A_mul_B!(eye(T, size(A.factors,2)), A)
+        A_mul_B!(A, eye(T, size(A.factors,2), size(A.factors,1)))
     end
 end
 
@@ -112,4 +120,34 @@ function A_mul_Bc{TA<:Number,TB<:Number}( A::StridedVecOrMat{TA}, B::LQPackedQ{T
     else
         A_mul_Bc!(convert(AbstractArray{TAB}, A), convert(AbstractMatrix{TAB},B))
     end
+end
+
+function \{TA,Tb}(A::LQ{TA}, b::StridedVector{Tb})
+    S = promote_type(TA,Tb)
+    m,n = size(A)
+    m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
+    AA = convert(Factorization{S}, A)
+    if n > m
+        x = A_ldiv_B!(AA, [b; zeros(S, n - m)])
+    else
+        x = A_ldiv_B!(AA, copy_oftype(b, S))
+    end
+    return length(x) > n ? x[1:n] : x
+end
+function \{TA,TB}(A::LQ{TA},B::StridedMatrix{TB})
+    S = promote_type(TA,TB)
+    m,n = size(A)
+    m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
+    AA = convert(Factorization{S}, A)
+    if n > m
+        X = A_ldiv_B!(AA, [B; zeros(S, n - m, size(B, 2))])
+    else
+        X = A_ldiv_B!(AA, copy_oftype(B, S))
+    end
+    return size(X, 1) > n ? X[1:n,:] : X
+end
+
+function A_ldiv_B!{T}(A::LQ{T}, B::StridedVecOrMat{T})
+    Ac_mul_B!(A[:Q], A_ldiv_B!(LowerTriangular(A[:L]),B))
+    return B
 end
